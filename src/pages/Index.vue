@@ -32,7 +32,19 @@
           <p>Disponível: {{balance.available_amount}}</p>
           <p>Em uso: {{balance.locked_amount}}</p>
         </q-card-section>
+        <q-card-actions>
+          <q-btn label="Ver Ordens" @click="listOrder(balance.currency_code)" flat/>
+        </q-card-actions>
       </q-card>
+    </div>
+
+    <div class="orders__list" v-if="orders && orders.length">
+      <q-table
+        :title="currentCurrency"
+        :data="orders"
+        :columns="columns"
+        hide-bottom
+      />
     </div>
   </q-page>
 </template>
@@ -63,27 +75,60 @@
 
 <script>
 export default {
+  axiosInstance: null,
   data () {
     return {
       apiToken: '',
-      balances: []
+      balances: [],
+      columns: [
+        { name: 'type', required: true, label: 'Tipo', field: row => row.type },
+        { name: 'status', required: true, label: 'Estado', field: row => row.status },
+        { name: 'unit_price', required: true, label: 'Preço Unit.', field: row => row.unit_price },
+        { name: 'requested_amount', required: true, label: 'Qtde Total', field: row => row.requested_amount },
+        { name: 'remaining_amount', required: true, label: 'Qtde Restante', field: row => row.remaining_amount },
+        { name: 'executed_amount', required: true, label: 'Qtde Ordem', field: row => row.executed_amount },
+        { name: 'total_price', required: true, label: 'Preço Total', field: row => row.total_price }
+      ],
+      currentCurrency: '',
+      orders: []
     }
   },
   methods: {
+    listOrder (code) {
+      this.orders = []
+
+      const DATE_FORMAT = 'YYYY-MM-DD'
+      const bar = this.$refs.bar
+
+      bar.start()
+
+      let url = '/market/user_orders/list?'
+      url += `pair=BRL${code}&`
+      url += `start_date=${this.$moment.utc().subtract(1, 'months').startOf('month').format(DATE_FORMAT)}&`
+      url += `end_date=${this.$moment.utc().format(DATE_FORMAT)}&`
+      url += 'page_size=100&current_page=1'
+      this.axiosInstance.get(url)
+        .then(res => { this.orders = res.data.data.orders })
+        .catch(console.error)
+        .then(() => { bar.stop() })
+
+      this.currentCurrency = code
+    },
+
     onSubmit () {
       const bar = this.$refs.bar
 
       bar.start()
 
       const API_URL = 'https://api.bitcointrade.com.br/v2'
-      const instance = this.$axios.create({
+      this.axiosInstance = this.$axios.create({
         baseURL: API_URL,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `ApiToken ${this.apiToken}`
         }
       })
-      instance.get('/wallets/balance')
+      this.axiosInstance.get('/wallets/balance')
         .then(res => { this.balances = res.data.data })
         .catch(console.error)
         .then(() => { bar.stop() })
@@ -92,6 +137,8 @@ export default {
     onReset () {
       this.apiToken = null
       this.balances = null
+      this.currentCurrency = null
+      this.orders = null
     }
   },
   name: 'PageIndex'
